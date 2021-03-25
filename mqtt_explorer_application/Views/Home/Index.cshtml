@@ -1,0 +1,369 @@
+﻿<!DOCTYPE HTML>
+<html>
+<head>
+    <style type="text/css">
+        .wrapper {
+            column-count: 2;
+            width: 100%;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.js" type="text/javascript"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script type="text/javascript">
+        var hostName;
+        var portName;
+        var pubMsg;
+        var topicName;
+        var qosLevelset;
+        var mqRetain;
+        var disconnectStatus;
+        var client;
+        var lwtTopicName;
+        var lwtPayload;
+        var lwtQos;
+        var lwtRetain;
+
+        // caleld to subscribe to a connection
+        function TopicSubscription() {
+            hostName = $("#MQTT-host").val();
+            portName = +$("#MQTT-port").val();
+            client = new Paho.MQTT.Client(hostName, portName, "browser_clientId" + Math.random());
+            //Example client = new Paho.MQTT.Client("m11.cloudmqtt.com", 32903, "web_" + parseInt(Math.random() * 100, 10));
+            client.onConnectionLost = onConnectionLost;
+            client.onMessageArrived = onMessageArrived;
+            var options = {
+                useSSL: false,
+                onSuccess: onConnect,
+                onFailure: doFail,
+                cleanSession: false,
+            }
+
+            // connect the client
+            client.connect(options);
+            $("#btn_Publish").prop("disabled", false);
+            lwtTopicName = $("#MQTT-LwtTopic").val();
+            $("#MQTT-LwtTopic").attr("readonly", true);
+            lwtPayload = $("#MQTT-LwtPayload").val();
+            $("#MQTT-LwtPayload").attr("readonly", true);
+            lwtQos = +$("#MQTT-LwtQosLevel option:selected").text();
+            $("#MQTT-LwtQosLevel").attr("disabled", true);
+            lwtRetain = $('#MQTT-LwtRetain').is(":checked");
+            $("#MQTT-LwtRetain").attr("disabled", true);
+            $("#btn_LwtDataSave").prop("disabled", true)
+            if (lwtPayload != null || lwtTopicName != null) {
+                var lastWillMessage = new Paho.MQTT.Message(lwtPayload);
+                lastWillMessage.destinationName = lwtTopicName;
+                lastWillMessage.qos = lwtQos;
+                lastWillMessage.retained = lwtRetain;
+                options.willMessage = lastWillMessage;
+            }
+        }
+
+        // called when the client connects
+        function onConnect() {
+            console.log("onConnect");
+            Set_New_Console_Msg("connected");
+            var topicName = $("#MQTT-topic").val();
+            client.subscribe(topicName, { qos: 2 });
+            Set_New_Console_Msg(topicName);
+            message = new Paho.MQTT.Message('');
+            message.destinationName = "topic/set";
+        }
+        function doFail(e) {
+            console.log(e);
+        }
+
+        // called when the client loses its connection
+        function onConnectionLost(responseObject) {
+            if (responseObject.errorCode !== 0) {
+                console.log("onConnectionLost:" + responseObject.errorMessage);
+                Set_New_Console_Msg("onConnectionLost:" + responseObject.errorMessage);
+            }
+            $("#MQTT-LwtTopic").attr("readonly", false);
+            $("#MQTT-LwtPayload").attr("readonly", false);
+            $("#MQTT-LwtQosLevel").attr("disabled", false);
+            $("#MQTT-LwtRetain").attr("disabled", false);
+            $("#btn_LwtDataSave").prop("disabled", false)
+        }
+
+        //called to disconnect the connection
+        function TopicDisconnect() {
+            var topicName = $("#MQTT-topic").val();
+            clientData = client;
+            client.unsubscribe(topicName);
+            client.disconnect();
+            Set_New_Console_Msg("topic unsubscribed:" + topicName);
+            $("#btn_Publish").prop("disabled", true);
+            $("#MQTT-LwtTopic").attr("readonly", false);
+            $("#MQTT-LwtPayload").attr("readonly", false);
+            $("#MQTT-LwtQosLevel").attr("disabled", false);
+            $("#MQTT-LwtRetain").attr("disabled", false);
+            $("#btn_LwtDataSave").prop("disabled", false)
+            return;
+        }
+
+        // called when a message arrives
+        function onMessageArrived(message) {
+            console.log("onMessageArrived:" + message.payloadString);
+            var topicName = $("#MQTT-topic").val();
+            Set_New_Console_Msg("Subscribed: Topic name: " + topicName + " : " + message.payloadString + " - qos:  " + message.qos + " -retain: " + message.retained);
+        }
+
+        // Set MQTT Messages to TextArea
+        function Set_New_Console_Msg(text) {
+            document.getElementById("txtAr_Console").value = document.getElementById("txtAr_Console").value + get_Fromatted_Time().toString() + ":  " + text + "\n";
+            document.getElementById("txtAr_Console").scrollTop = document.getElementById("txtAr_Console").scrollHeight;
+        }
+
+        //Clear Console
+        function clear_Console() {
+            document.getElementById("txtAr_Console").value = "";
+        }
+        function get_Fromatted_Time() {
+            var dt = new Date();
+            var hours = dt.getHours() == 0 ? "12" : dt.getHours() > 12 ? dt.getHours() - 12 : dt.getHours();
+            var minutes = (dt.getMinutes() < 10 ? "0" : "") + dt.getMinutes();
+            var seconds = dt.getSeconds();
+            var ampm = dt.getHours() < 12 ? "AM" : "PM";
+            var formattedTime = hours + ":" + minutes + ":" + seconds + " " + ampm;
+            return formattedTime;
+        }
+
+        //called to publish a message to a connection
+        function TopicPublish() {
+            debugger;
+            var pubMsg = $("#MQTT-publish").val();
+            var topicName = $("#MQTT-topic").val();
+            var qosLevelset = +$("#MQTT-qosLevel option:selected").text();
+            var mqRetain = $('#MQTT-retain').is(":checked");
+            message = new Paho.MQTT.Message(pubMsg);
+            message.destinationName = topicName;
+            message.retained = mqRetain;
+            message.qos = qosLevelset;
+            client.send(message);
+            Set_New_Console_Msg("Published: " + "\"" + pubMsg + "\"" + "to MQTT Topic: " + "\"" + topicName + "\"");
+            return;
+        }
+
+        //called to save lwt details
+        function SaveLWTdetails() {
+            var x = document.getElementById("snackbar");
+            x.className = "show";
+            setTimeout(function () { x.className = x.className.replace("show", ""); }, 3000);
+            lwtTopicName = $("#MQTT-LwtTopic").val();
+            lwtPayload = $("#MQTT-LwtPayload").val();
+            lwtQos = +$("#MQTT-LwtQosLevel option:selected").text();
+            lwtRetain = $('#MQTT-LwtRetain').is(":checked");
+        }
+    </script>
+</head>
+<body style="width:100%">
+    <div class="container col-sm-12 col-xs-12" style="padding: 0px 0px 0px 0px" ;>
+        <div class="wrapper" style="padding: 0px 0px 0px 0px">
+
+            @*client connection*@
+            <div class="card" style="max-height:545px;padding-bottom:113px">
+                <label class="col-sm-12 control-label" style="padding:20px 0px 0px 20px">Subscription:</label>
+                <div class="wrapper row" style="margin-left:2px">
+                    <div class="card-body" style="margin-bottom:-20px">
+                        <label class="col-sm-12 control-label" style="margin-left:-12px">Host:</label>
+                        <input type="text" class="form-control col-sm-12" id="MQTT-host" value="127.0.0.1" placeholder="Type MQTT host here...">
+                    </div>
+                    <div class="card-body" style="margin-bottom:0px">
+                        <label class="col-sm-12 control-label" style="margin-left:-12px">Port:</label>
+                        <input type="number" class="form-control col-sm-12" id="MQTT-port" value="8081" placeholder="Type MQTT port here...">
+                    </div>
+                </div>
+
+                @*subscribe*@
+                <div class="card-body col-sm-12">
+                    <label class="col-sm-12 control-label" style="margin: 0px 0px 8px -12px;padding:0px 0px 0px 15px">Topic (subscribe & publish):</label>
+                    <div class="form-group col-sm-12" style="margin: 0px 0px 8px 0px;padding:0px 0px 0px 0px">
+                        <input type="text" class="form-control col-sm-12" id="MQTT-topic" value="topic/set" placeholder="Type MQTT topic here..." style="margin: 0px 0px 8px 0px;padding:0px 0px 0px 15px">
+                    </div>
+                    <br>
+                    <div class="form-group col-sm-6" style="margin: 0px 0px 8px 0px;padding:0px 0px 0px 0px">
+                        <button type="button" id="btn_Clear_Console" class="mui-btn mui-btn--raised mui-btn--primary btn-outline-primary col-sm-12 "
+                                style="margin: 0px 0px 0px 0px;padding:0px 0px 0px 0px;max-width:485px" onclick="TopicSubscription()">
+                            Subscribe
+                        </button>
+                    </div>
+                    <div class="form-group" style="margin-left:-10px;margin-bottom:60px">
+                        <p class="col-sm-12"><sup>subscribe to topic to publish messages</sup></p>
+                    </div>
+                </div>
+            </div>
+            <br>
+
+            @*last will and testament*@
+            <div class="card col-sm-12" style="max-height: 650px;height:545px">
+                <div class="row" style="padding-bottom:-105px">
+                    <label class="card-body col-sm-12" style="margin-bottom:-15px">Last will & testament:</label>
+                    <div class="col-sm-6 card-body">
+                        <label class="control-label">LWT topic:</label>
+                        <input type="text" class="form-control" id="MQTT-LwtTopic" value="topic/set" placeholder="Type MQTT last will and testament topic here...">
+                    </div>
+                    <div class="col-sm-6 card-body">
+                        <label class="control-label">LWT payload:</label>
+                        <input type="text" class="form-control" id="MQTT-LwtPayload" value="browser client disconnected, battery drained!!" placeholder="Type MQTT last will and testament message here...">
+                    </div>
+                    <div class="col-sm-6 card-body">
+                        <label class="col-sm-6 control-label" style="margin-left:-12px">Qos level:</label>
+                        <select class="form-control col-sm-12" id="MQTT-LwtQosLevel">
+                            <option active value="0" id="MQTT-qosLevel" selected>0</option>
+                            <option active value="1" id="MQTT-qosLevel">1</option>
+                            <option active value="2" id="MQTT-qosLevel">2</option>
+                        </select>
+                    </div>
+                    <div class="card-body col-sm-6">
+                        <label class="col-sm-6 control-label form-group" style="margin-left:-15px">Retain :</label>
+                        <div class="custom-checkbox" style="margin-top:-8px">
+                            <input type="checkbox" id="MQTT-LwtRetain" style="width:19px;height:19px;margin-top:5px" />
+                            <label style="margin-left:10px;margin-top:-2px">
+                                True
+                            </label>
+                        </div>
+                    </div>
+                    <div class="card-body col-sm-6">
+                        <button type="button" id="btn_LwtDataSave" class="mui-btn mui-btn--raised mui-btn--primary btn-outline-info col-sm-12 "
+                                style="max-width:485px" onclick="SaveLWTdetails()">
+                            Save
+                        </button>
+                    </div>
+                </div>
+                <br>
+            </div>
+        </div>
+        <br>
+
+        @*publisher*@
+        <div class="wrapper" style="padding: 0px 0px 0px 0px">
+            <div class="card col-sm-12" style="max-height: 650px;height:580px">
+                <div class="row">
+                    <label class="card-body col-sm-12" style="margin-bottom:-5px">Publisher:</label>
+                    <div class="col-sm-12 card-body" style="margin-top:-10px">
+                        <label class="control-label">Publisher message:</label>
+                        <input type="text" class="form-control" id="MQTT-publish" value="message sent from browser" placeholder="Type MQTT publish message here...">
+                    </div>
+                    <br>
+                    <label class="col-sm-12 control-label card-body" style="margin-top:-30px">Publishing controls:</label>
+                    <div class="form-group col-sm-12 container" style="margin-top:-30px">
+                        <div class="wrapper row" style="margin-left:2px">
+                            <div class="card-body" style="margin-top: -15px">
+                                <label class="col-sm-12 control-label form-group" style="margin-left:-29px;">Qos level:</label>
+                                <div class="container col-sm-12">
+                                    <select class="form-control col-md-12" id="MQTT-qosLevel" style="margin-left:-29px">
+                                        <option active value="0" id="MQTT-qosLevel" selected>0</option>
+                                        <option active value="1" id="MQTT-qosLevel">1</option>
+                                        <option active value="2" id="MQTT-qosLevel">2</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <label class="col-sm-12 control-label form-group" style="margin-left:-15px">Retain :</label>
+                                <div class="custom-checkbox">
+                                    <input type="checkbox" id="MQTT-retain" style="width:19px;height:19px;margin-top:5px" />
+                                    <label style="margin-left:10px;margin-top:-2px">
+                                        True
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <br>
+                    <br>
+                    <div class="col-sm-6 card-body">
+                        <button type="button" id="btn_Publish" disabled class="mui-btn mui-btn--raised mui-btn--primary btn-outline-primary col-md-12"
+                                onclick="TopicPublish()">
+                            Publish
+                        </button>
+                    </div>
+                    <div class="col-sm-6 card-body" style="padding-bottom:37px">
+                        <button type="button" id="btn_Disconnect" class="mui-btn mui-btn--raised mui-btn--primary btn-outline-danger col-md-12"
+                                onclick="TopicDisconnect()">
+                            Disconnect
+                        </button>
+                        <br>
+                    </div>
+                </div>
+                <br>
+            </div>
+            <br>
+            <div class="card" style="max-height: 650px;height:580px">
+                <div class="form-group card-body">
+                    <label class="col-sm-12 control-label" for="txtAr_Console">Console:</label>
+                    <textarea ype="textarea" class="form-control" rows="12" cols="100" id="txtAr_Console" style="max-width:1100px;max-height:420px;height:420px"></textarea>
+                    <div class="form-group col-sm-6" style="margin: 0px 0px 8px 0px;padding:0px 0px 0px 0px">
+                        <button type="button" id="btn_Clear_Console" style="cursor:pointer" class="mui-btn mui-btn--raised mui-btn--primary btn-outline-warning col-sm-12" onclick="clear_Console();">Clear Console</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <br>
+    <br>
+</body>
+</html>
+<style>
+    #snackbar {
+        visibility: hidden;
+        min-width: 250px;
+        margin-left: -125px;
+        background-color: #333;
+        color: #fff;
+        text-align: center;
+        border-radius: 2px;
+        padding: 16px;
+        float: right;
+        z-index: 1;
+        left: 50%;
+        bottom: 30px;
+        font-size: 17px;
+    }
+        #snackbar.show {
+            visibility: visible;
+            -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        }
+    @@-webkit-keyframes fadein {
+        from {
+            bottom: 0;
+            opacity: 0;
+        }
+        to {
+            bottom: 30px;
+            opacity: 1;
+        }
+    }
+    @@keyframes fadein {
+        from {
+            bottom: 0;
+            opacity: 0;
+        }
+        to {
+            bottom: 30px;
+            opacity: 1;
+        }
+    }
+    @@-webkit-keyframes fadeout {
+        from {
+            bottom: 30px;
+            opacity: 1;
+        }
+        to {
+            bottom: 0;
+            opacity: 0;
+        }
+    }
+    @@keyframes fadeout {
+        from {
+            bottom: 30px;
+            opacity: 1;
+        }
+        to {
+            bottom: 0;
+            opacity: 0;
+        }
+    }
+</style>
